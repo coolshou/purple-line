@@ -26,6 +26,7 @@ How to install
 Make sure you have the required prerequisites:
 
 * libpurple - probably available via package manager
+  * sudo apt-get install libpurple-dev
 * Apache Thrift compiler and C++ library - v0.9.1 should be stable. The Git version and OS packages
   are sometimes a bit iffy. Compiling by hand is your best bet.
 * line_main.thrift - not included, must be placed in the project root directory. For the time being,
