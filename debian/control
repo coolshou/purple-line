@@ -1,0 +1,14 @@
+Source: purple-line
+Section: net
+Priority: optional
+Maintainer: jimmy <jimmy@jimmy-alpha> 
+Build-Depends: debhelper (>= 9), libthrift-dev (>= 0.9.2), thrift-compiler (>= 0.9.2), libpurple-dev (>=1:2.10)
+Standards-Version: 3.9.5
+Homepage: http://altrepo.eu/git/purple-line.git/
+
+Package: purple-line
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Pidgin protocol plugin for LINE by Naver/LINE Corporation.
+ libpurple (Pidgin, Finch) protocol plugin for LINE (http://line.me/) 
+ by Naver / LINE Corporation.

@@ -4,6 +4,8 @@ CXXFLAGS = -g -Wall -shared -fPIC \
 	`pkg-config --cflags purple thrift`
 LIBS = `pkg-config --libs purple thrift`
 
+PURPLE_LIBDIR=`pkg-config --variable=plugindir purple`
+
 MAIN = libline.so
 
 GEN_SRCS = thrift_line/line_main_constants.cpp thrift_line/line_main_types.cpp \
@@ -35,8 +37,10 @@ clean:
 
 # TODO: Make proper install target
 install:
-	mkdir -p ~/.purple/plugins
-	cp $(MAIN) ~/.purple/plugins
+	mkdir -p $(DESTDIR)$(PURPLE_LIBDIR)
+	cp $(MAIN) $(DESTDIR)$(PURPLE_LIBDIR)/
+#	mkdir -p ~/.purple/plugins
+#	cp $(MAIN) ~/.purple/plugins
 
 depend: .depend
 
