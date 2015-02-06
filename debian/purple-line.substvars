@@ -1,2 +1,0 @@
-shlibs:Depends=libc6 (>= 2.14), libgcc1 (>= 1:4.1.1), libglib2.0-0 (>= 2.24.0), libpurple0 (>= 1:2.10), libstdc++6 (>= 4.6), libthrift0
-misc:Depends=
