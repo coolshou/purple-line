@@ -2,8 +2,11 @@
 libpurple (Pidgin) plugin for LINE
 
 original code:
+
  line-protocol: http://altrepo.eu/git/line-protocol.git/
+ 
  purple-line: http://altrepo.eu/git/purple-line.git/
+ 
 owner:	Matti Virkkunen
 
 purple-line
