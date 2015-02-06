@@ -102,8 +102,4 @@ To do
 * Check builds on more platforms
 * Packaging
 
-TODO:
-  1. Line protocol icon
-  2. Line member in group tree
-  3. font style
-  4. send image/link
+
