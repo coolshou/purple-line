@@ -5,6 +5,7 @@ CXXFLAGS = -g -Wall -shared -fPIC \
 LIBS = `pkg-config --libs purple thrift`
 
 PURPLE_LIBDIR=`pkg-config --variable=plugindir purple`
+PURPLE_DATADIR=`pkg-config --variable=datadir purple`
 
 MAIN = libline.so
 
@@ -39,6 +40,10 @@ clean:
 install:
 	mkdir -p $(DESTDIR)$(PURPLE_LIBDIR)
 	cp $(MAIN) $(DESTDIR)$(PURPLE_LIBDIR)/
+#icon
+	mkdir -p $(DESTDIR)$(PURPLE_DATADIR)/pixmaps/pidgin/protocols
+	cp -r pixmaps/* $(DESTDIR)$(PURPLE_DATADIR)/pixmaps/pidgin/protocols/
+	
 #	mkdir -p ~/.purple/plugins
 #	cp $(MAIN) ~/.purple/plugins
 
