@@ -1,8 +1,9 @@
 CXX = g++
-CXXFLAGS = -g -Wall -shared -fPIC \
+CXXFLAGS = -Wall -shared -fPIC \
 	-DHAVE_INTTYPES_H -DHAVE_CONFIG_H -DPURPLE_PLUGINS \
-	`pkg-config --cflags purple thrift`
-LIBS = `pkg-config --libs purple thrift`
+	-I/usr/include/thrift \
+	`pkg-config --cflags purple glib-2.0`
+LIBS = `pkg-config --libs purple glib-2.0` -lthrift
 
 PURPLE_LIBDIR=`pkg-config --variable=plugindir purple`
 PURPLE_DATADIR=`pkg-config --variable=datadir purple`
@@ -25,7 +26,7 @@ $(MAIN): $(OBJS)
 	$(CXX) $(CXXFLAGS) -Wl,-z,defs -o $(MAIN) $(OBJS) $(LIBS)
 
 .cpp.o:
-	$(CXX) $(CXXFLAGS) -std=c++11 -c $< -o $@
+	$(CXX) $(CXXFLAGS) -std=c++1y -c $< -o $@
 
 thrift_line: line_main.thrift
 	mkdir -p thrift_line
