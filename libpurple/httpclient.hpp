@@ -8,9 +8,9 @@
 #include <util.h>
 
 enum class HTTPFlag {
-    none =  0,
-    auth =  1 << 0,
-    large = 1 << 1,
+    NONE =  0,
+    AUTH =  1 << 0,
+    LARGE = 1 << 1,
 };
 
 inline constexpr HTTPFlag operator|(HTTPFlag a, HTTPFlag b) {
@@ -29,14 +29,14 @@ class HTTPClient {
     struct Request {
         HTTPClient *client;
         std::string url;
+        std::string content_type;
+        std::string body;
         HTTPFlag flags;
         CompleteFunc callback;
         PurpleUtilFetchUrlData *handle;
     };
 
     PurpleAccount *acct;
-
-    std::string auth_token;
 
     std::list<Request *> request_queue;
     int in_flight;
@@ -53,9 +53,10 @@ public:
     HTTPClient(PurpleAccount *acct);
     ~HTTPClient();
 
-    void set_auth_token(std::string token);
-
     void request(std::string url, CompleteFunc callback);
     void request(std::string url, HTTPFlag flags, CompleteFunc callback);
+    void request(std::string url, HTTPFlag flags,
+        std::string content_type, std::string body,
+        CompleteFunc callback);
 
 };

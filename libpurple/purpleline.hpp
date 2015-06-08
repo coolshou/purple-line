@@ -44,6 +44,12 @@ enum class ChatType {
     GROUP_INVITE = 3,
 };
 
+std::string markup_escape(std::string const &text);
+
+std::string markup_unescape(std::string const &markup);
+
+std::string url_encode(std::string const &str);
+
 class PurpleLine {
 
     struct Attachment {
@@ -65,6 +71,9 @@ class PurpleLine {
     boost::shared_ptr<ThriftClient> c_out;
 
     HTTPClient http;
+
+    // Remove if libpurple HTTP ever gets support for binary request bodies
+    LineHttpTransport os_http;
 
     friend class Poller;
     Poller poller;
@@ -115,13 +124,6 @@ public:
 
 private:
 
-    static std::string markup_escape(std::string const &text);
-    static std::string markup_unescape(std::string const &markup);
-    static std::string url_encode(std::string const &str);
-
-    static std::string get_sticker_id(line::Message &msg);
-    static std::string get_sticker_url(line::Message &msg, bool thumb = false);
-
     void connect_signals();
     void disconnect_signals();
 
@@ -131,9 +133,9 @@ private:
         line::ContentType::type type, std::string id);
     Attachment *conv_attachment_get(PurpleConversation *conv, std::string token);
 
-    void handle_message(line::Message &msg, bool replay);
-    void write_message(PurpleConversation *conv, line::Message &msg,
-        time_t mtime, int flags, std::string text);
+    void write_message(line::Message &msg, bool replay);
+    void write_message(PurpleConversation *conv, std::string &from, std::string &text,
+        time_t mtime, int flags);
 
     std::string get_room_display_name(line::Room &room);
     void set_chat_participants(PurpleConvChat *chat, line::Room &room);
@@ -141,8 +143,11 @@ private:
 
     line::Contact &get_up_to_date_contact(line::Contact &c);
 
-    int send_message(std::string to, std::string text);
-    void send_message(line::Message &msg);
+    int send_message(std::string to, const char *markup);
+    void send_message(
+        line::Message &msg,
+        std::function<void(line::Message &msg)> callback=std::function<void(line::Message &)>());
+    void upload_media(std::string message_id, std::string type, std::string data);
     void push_recent_message(std::string id);
 
     void signal_blist_node_removed(PurpleBlistNode *node);
@@ -160,13 +165,14 @@ private:
     // Login process methods, executed in this this order
     void login_start();
 
-    void got_auth_token(std::string auth_token);
+    void get_auth_token();
+    void set_auth_token(std::string auth_token);
     void get_last_op_revision();
     void get_profile();
     void get_contacts();
     void get_groups();
     void get_rooms();
-    void update_rooms(line::TMessageBoxWrapUpResponse wrap_up_list);
+    void update_rooms(line::MessageBoxWrapUpList wrap_up_list);
     void get_group_invites();
 
     void login_done();

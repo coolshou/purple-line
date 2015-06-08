@@ -24,7 +24,7 @@ public:
     ThriftClient(PurpleAccount *acct, PurpleConnection *conn, std::string path);
 
     void set_path(std::string path);
-    void set_auth_token(std::string token);
+    void set_auto_reconnect(bool auto_reconnect);
     void send(std::function<void()> callback);
 
     int status_code();

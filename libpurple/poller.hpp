@@ -9,10 +9,6 @@
 
 #include "thriftclient.hpp"
 
-#define LINEPRPL_ID "prpl-mvirkkunen-line"
-
-#define LINE_ACCOUNT_CERTIFICATE "line-certificate"
-
 class PurpleLine;
 
 class Poller {
@@ -28,7 +24,6 @@ public:
     ~Poller();
 
     void start();
-    void set_auth_token(std::string token) { client->set_auth_token(token); }
     void set_local_rev(int64_t local_rev) { this->local_rev = local_rev; }
 
 private:

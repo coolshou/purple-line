@@ -21,10 +21,15 @@ LineHttpTransport::LineHttpTransport(
     host(host),
     port(port),
     ls_mode(ls_mode),
-    auth_token(""),
+    state(ConnectionState::DISCONNECTED),
+    auto_reconnect(false),
+    reconnect_timeout_handle(0),
+    reconnect_timeout(0),
     ssl(NULL),
+    input_handle(0),
     connection_id(0),
-    connection_close(false),
+    request_written(0),
+    keep_alive(false),
     status_code_(0),
     content_length_(0)
 {
@@ -34,8 +39,9 @@ LineHttpTransport::~LineHttpTransport() {
     close();
 }
 
-void LineHttpTransport::set_auth_token(std::string token) {
-    this->auth_token = token;
+void LineHttpTransport::set_auto_reconnect(bool auto_reconnect) {
+    if (state == ConnectionState::DISCONNECTED)
+        this->auto_reconnect = auto_reconnect;
 }
 
 int LineHttpTransport::status_code() {
@@ -47,8 +53,10 @@ int LineHttpTransport::content_length() {
 }
 
 void LineHttpTransport::open() {
-    if (ssl)
+    if (state != ConnectionState::DISCONNECTED)
         return;
+
+    state = ConnectionState::CONNECTED;
 
     in_progress = false;
 
@@ -62,9 +70,35 @@ void LineHttpTransport::open() {
         (gpointer)this);
 }
 
+void LineHttpTransport::ssl_connect(PurpleSslConnection *, PurpleInputCondition) {
+    reconnect_timeout = 0;
+
+    send_next();
+}
+
+void LineHttpTransport::ssl_error(PurpleSslConnection *, PurpleSslErrorType err) {
+    purple_debug_warning("line", "SSL error: %s\n", purple_ssl_strerror(err));
+
+    ssl = nullptr;
+
+    purple_connection_ssl_error(conn, err);
+}
+
 void LineHttpTransport::close() {
-    if (!ssl)
+    if (state == ConnectionState::DISCONNECTED)
         return;
+
+    state = ConnectionState::DISCONNECTED;
+
+    if (reconnect_timeout_handle) {
+        purple_timeout_remove(reconnect_timeout_handle);
+        reconnect_timeout_handle = 0;
+    }
+
+    if (input_handle) {
+        purple_input_remove(input_handle);
+        input_handle = 0;
+    }
 
     purple_ssl_close(ssl);
     ssl = NULL;
@@ -86,11 +120,14 @@ void LineHttpTransport::write_virt(const uint8_t *buf, uint32_t len) {
     request_buf.sputn((const char *)buf, len);
 }
 
-void LineHttpTransport::request(std::string method, std::string path, std::function<void()> callback) {
+void LineHttpTransport::request(std::string method, std::string path, std::string content_type,
+    std::function<void()> callback)
+{
     Request req;
     req.method = method;
     req.path = path;
-    req.data = request_buf.str();
+    req.content_type = content_type;
+    req.body = request_buf.str();
     req.callback = callback;
     request_queue.push(req);
 
@@ -99,14 +136,8 @@ void LineHttpTransport::request(std::string method, std::string path, std::funct
     send_next();
 }
 
-/*const uin8_t* LineHttpTransport::borrow_virt(uint8_t *buf, uint32_t *len) {
-}
-
-void LineHttpTransport::consume_virt(uint32_t len) {
-}*/
-
 void LineHttpTransport::send_next() {
-    if (!ssl) {
+    if (state != ConnectionState::CONNECTED) {
         open();
         return;
     }
@@ -114,7 +145,7 @@ void LineHttpTransport::send_next() {
     if (in_progress || request_queue.empty())
         return;
 
-    connection_close = false;
+    keep_alive = ls_mode;
     status_code_ = -1;
     content_length_ = -1;
 
@@ -125,68 +156,88 @@ void LineHttpTransport::send_next() {
     data
         << next_req.method << " " << next_req.path << " HTTP/1.1" "\r\n";
 
-    if (next_req.method == "POST")
-        data << "Content-Length: " << next_req.data.size() << "\r\n";
-
-    if (ls_mode) {
-        if (x_ls != "")
-        {
-            data << "X-LS: " << x_ls << "\r\n";
-        }
-        else
-        {
-            data
-                << "Connection: Keep-Alive" "\r\n"
-                << "Content-Type: application/x-thrift" "\r\n"
-                << "Host: " << host << ":" << port << "\r\n"
-                << "Accept: application/x-thrift" "\r\n"
-                << "User-Agent: " LINE_USER_AGENT "\r\n"
-                << "X-Line-Application: " LINE_APPLICATION "\r\n";
-
-            if (auth_token != "")
-                data << "X-Line-Access: " << auth_token << "\r\n";
-        }
+    if (ls_mode && x_ls != "") {
+        data << "X-LS: " << x_ls << "\r\n";
     } else {
         data
-            << "Connection: Keep-Alive" "\r\n"
+            << "Connection: Keep-Alive\r\n"
+            << "Content-Type: " << next_req.content_type << "\r\n"
             << "Host: " << host << ":" << port << "\r\n"
             << "User-Agent: " LINE_USER_AGENT "\r\n"
             << "X-Line-Application: " LINE_APPLICATION "\r\n";
 
-        if (auth_token != "")
+        const char *auth_token = purple_account_get_string(acct, LINE_ACCOUNT_AUTH_TOKEN, "");
+        if (auth_token)
             data << "X-Line-Access: " << auth_token << "\r\n";
     }
 
+    if (next_req.method == "POST")
+        data << "Content-Length: " << next_req.body.size() << "\r\n";
+
     data
         << "\r\n"
-        << next_req.data;
+        << next_req.body;
 
-    std::string data_str = data.str();
-
+    request_data = data.str();
+    request_written = 0;
     in_progress = true;
-    purple_ssl_write(ssl, data_str.c_str(), data_str.size());
+
+    input_handle = purple_input_add(ssl->fd, PURPLE_INPUT_WRITE,
+        WRAPPER(LineHttpTransport::ssl_write), (gpointer)this);
+    ssl_write(ssl->fd, PURPLE_INPUT_WRITE);
 }
 
-int LineHttpTransport::reconnect() {
-    close();
+int LineHttpTransport::reconnect_timeout_cb() {
+    reconnect_timeout = reconnect_timeout ? 10 : 60;
 
-    in_progress = false;
+    state = ConnectionState::DISCONNECTED;
 
     open();
 
-    // Don't repeat when using as timeout callback
     return FALSE;
 }
 
-void LineHttpTransport::ssl_connect(PurpleSslConnection *, PurpleInputCondition) {
-    purple_ssl_input_add(ssl, WRAPPER(LineHttpTransport::ssl_input), (gpointer)this);
+void LineHttpTransport::write_request() {
+    if (request_written < request_data.size()) {
+        size_t r = purple_ssl_write(ssl,
+            request_data.c_str() + request_written, request_data.size() - request_written);
 
-    send_next();
+        request_written += r;
+
+        purple_debug_info("line", "Wrote: %d, %d out of %d!\n",
+            (int)r, (int)request_written, (int)request_data.size());
+    }
 }
 
-void LineHttpTransport::ssl_input(PurpleSslConnection *, PurpleInputCondition cond) {
-    if (!ssl || cond != PURPLE_INPUT_READ)
+void LineHttpTransport::ssl_write(gint, PurpleInputCondition) {
+    if (state != ConnectionState::CONNECTED) {
+        if (input_handle) {
+            purple_input_remove(input_handle);
+            input_handle = 0;
+        }
+
         return;
+    }
+
+    if (request_written < request_data.size()) {
+        request_written += purple_ssl_write(ssl,
+            request_data.c_str() + request_written, request_data.size() - request_written);
+    }
+
+    if (request_written >= request_data.size()) {
+        purple_input_remove(input_handle);
+
+        input_handle = purple_input_add(ssl->fd, PURPLE_INPUT_READ,
+            WRAPPER(LineHttpTransport::ssl_read), (gpointer)this);
+    }
+}
+
+void LineHttpTransport::ssl_read(gint, PurpleInputCondition) {
+    if (state != ConnectionState::CONNECTED) {
+        purple_input_remove(input_handle);
+        input_handle = 0;
+        return;
+    }
 
     bool any = false;
 
@@ -197,15 +248,24 @@ void LineHttpTransport::ssl_input(PurpleSslConnection *, PurpleInputCondition co
             if (any)
                 break;
 
-            // Disconnected from server.
+            purple_debug_info("line", "Connection lost.\n");
 
             close();
 
-            // If there was a request in progress, re-open immediately to try again.
             if (in_progress) {
-                purple_debug_info("line", "Reconnecting immediately to re-send.\n");
+                if (auto_reconnect) {
+                    purple_debug_info("line", "Reconnecting in %ds...\n",
+                        reconnect_timeout);
 
-                open();
+                    state = ConnectionState::RECONNECTING;
+
+                    purple_timeout_add_seconds(
+                        reconnect_timeout,
+                        WRAPPER(LineHttpTransport::reconnect_timeout_cb),
+                        (gpointer)this);
+                } else {
+                    purple_connection_error(conn, "LINE: Lost connection to server.");
+                }
             }
 
             return;
@@ -221,9 +281,13 @@ void LineHttpTransport::ssl_input(PurpleSslConnection *, PurpleInputCondition co
         try_parse_response_header();
 
         if (content_length_ >= 0 && response_str.size() >= (size_t)content_length_) {
+            purple_input_remove(input_handle);
+            input_handle = 0;
+
             if (status_code_ == 403) {
                 // Don't try to reconnect because this usually means the user has logged in from
                 // elsewhere.
+
                 // TODO: Check actual reason
 
                 conn->wants_to_die = TRUE;
@@ -243,29 +307,32 @@ void LineHttpTransport::ssl_input(PurpleSslConnection *, PurpleInputCondition co
                 msg += err.reason;
 
                 if (err.code == line::ErrorCode::NOT_AUTHORIZED_DEVICE) {
+                    purple_account_remove_setting(acct, LINE_ACCOUNT_AUTH_TOKEN);
+
                     if (err.reason == "AUTHENTICATION_DIVESTED_BY_OTHER_DEVICE") {
                         msg = "LINE: You have been logged out because "
                             "you logged in from another device.";
                     } else if (err.reason == "REVOKE") {
                         msg = "LINE: This device was logged out via the mobile app.";
                     }
+
+                    // Don't try to reconnect so we don't fight over the session with another client
+
+                    conn->wants_to_die = TRUE;
                 }
 
-                conn->wants_to_die = TRUE;
                 purple_connection_error(conn, msg.c_str());
                 return;
             } catch (apache::thrift::TApplicationException &err) {
                 std::string msg = "LINE: Application error: ";
                 msg += err.what();
 
-                conn->wants_to_die = TRUE;
                 purple_connection_error(conn, msg.c_str());
                 return;
             } catch (apache::thrift::transport::TTransportException &err) {
                 std::string msg = "LINE: Transport error: ";
                 msg += err.what();
 
-                conn->wants_to_die = TRUE;
                 purple_connection_error(conn, msg.c_str());
                 return;
             }
@@ -277,7 +344,7 @@ void LineHttpTransport::ssl_input(PurpleSslConnection *, PurpleInputCondition co
             if (connection_id != connection_id_before)
                 break; // Callback closed connection, don't try to continue reading
 
-            if (connection_close) {
+            if (!keep_alive) {
                 close();
                 send_next();
                 break;
@@ -286,14 +353,6 @@ void LineHttpTransport::ssl_input(PurpleSslConnection *, PurpleInputCondition co
             send_next();
         }
     }
-}
-
-void LineHttpTransport::ssl_error(PurpleSslConnection *, PurpleSslErrorType err) {
-    purple_debug_warning("line", "SSL error: %s\n", purple_ssl_strerror(err));
-
-    ssl = nullptr;
-
-    purple_connection_ssl_error(conn, err);
 }
 
 void LineHttpTransport::try_parse_response_header() {
@@ -323,8 +382,8 @@ void LineHttpTransport::try_parse_response_header() {
             std::string value;
             std::getline(stream, value, '\r');
 
-            if (value == "Close" || value == "close")
-                connection_close = true;
+            if (value == "Keep-Alive" || value == "Keep-alive" || value == "keep-alive")
+                keep_alive = true;
         }
 
         stream.ignore(256, '\n');

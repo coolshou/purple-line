@@ -1,5 +1,3 @@
-#include <iostream>
-
 #include <time.h>
 
 #include <debug.h>
@@ -12,6 +10,7 @@ Poller::Poller(PurpleLine &parent)
     : parent(parent)
 {
     client = boost::make_shared<ThriftClient>(parent.acct, parent.conn, LINE_POLL_PATH);
+    client->set_auto_reconnect(true);
 }
 
 Poller::~Poller() {
@@ -109,11 +108,8 @@ void Poller::fetch_operations() {
                     parent.blist_update_chat(op.param1, ChatType::ROOM);
 
                 case line::OpType::SEND_MESSAGE: // 25
-                    parent.handle_message(op.message, false);
-                    break;
-
                 case line::OpType::RECEIVE_MESSAGE: // 26
-                    parent.handle_message(op.message, false);
+                    parent.write_message(op.message, false);
                     break;
 
                 case line::OpType::CANCEL_INVITATION_GROUP: // 31

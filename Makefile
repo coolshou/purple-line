@@ -1,58 +1,22 @@
-CXX = g++
-CXXFLAGS = -g -Wall -shared -fPIC \
-	-DHAVE_INTTYPES_H -DHAVE_CONFIG_H -DPURPLE_PLUGINS \
-	`pkg-config --cflags purple thrift`
-LIBS = `pkg-config --libs purple thrift`
-
-PURPLE_LIBDIR=`pkg-config --variable=plugindir purple`
-PURPLE_DATADIR=`pkg-config --variable=datadir purple`
-
-MAIN = libline.so
-
-GEN_SRCS = thrift_line/line_main_constants.cpp thrift_line/line_main_types.cpp \
-	thrift_line/TalkService.cpp
-REAL_SRCS = pluginmain.cpp linehttptransport.cpp thriftclient.cpp httpclient.cpp \
-	purpleline.cpp purpleline_login.cpp purpleline_blist.cpp purpleline_chats.cpp \
-	poller.cpp pinverifier.cpp
-SRCS += $(GEN_SRCS)
-SRCS += $(REAL_SRCS)
-
-OBJS = $(SRCS:.cpp=.o)
-
-all: $(MAIN)
-
-$(MAIN): $(OBJS)
-	$(CXX) $(CXXFLAGS) -Wl,-z,defs -o $(MAIN) $(OBJS) $(LIBS)
-
-.cpp.o:
-	$(CXX) $(CXXFLAGS) -std=c++11 -c $< -o $@
-
-thrift_line: line_main.thrift
-	mkdir -p thrift_line
-	thrift --gen cpp -out thrift_line line_main.thrift
-
-clean:
-	rm -f $(MAIN)
-	rm -f *.o
-	rm -rf thrift_line
-
-# TODO: Make proper install target
-install:
-	mkdir -p $(DESTDIR)$(PURPLE_LIBDIR)
-	cp $(MAIN) $(DESTDIR)$(PURPLE_LIBDIR)/
-#icon
-	mkdir -p $(DESTDIR)$(PURPLE_DATADIR)/pixmaps/pidgin/protocols
-	cp -r pixmaps/* $(DESTDIR)$(PURPLE_DATADIR)/pixmaps/pidgin/protocols/
-	
-#	mkdir -p ~/.purple/plugins
-#	cp $(MAIN) ~/.purple/plugins
-
-depend: .depend
-
-.depend: thrift_line $(REAL_SRCS)
-	rm -f .depend
-	$(CXX) $(CXXFLAGS) -MM $(REAL_SRCS) >>.depend
-
--include .depend
+all:
+	$(MAKE) -C libpurple
 
 .PHONY: clean
+clean:
+	$(MAKE) -C libpurple clean
+
+.PHONY: user-install
+user-install: all
+	$(MAKE) -C libpurple user-install
+
+.PHONY: user-uninstall
+user-uninstall:
+	$(MAKE) -C libpurple user-uninstall
+
+.PHONY: install
+install: all
+	$(MAKE) -C libpurple install
+
+.PHONY: uninstall
+uninstall:
+	$(MAKE) -C libpurple uninstall
