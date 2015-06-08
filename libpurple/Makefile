@@ -42,11 +42,11 @@ clean:
 
 # TODO: Make proper install target
 install:
-	mkdir -p $(DESTDIR)$(PURPLE_LIBDIR)
-	cp $(MAIN) $(DESTDIR)$(PURPLE_LIBDIR)/
+	mkdir -p $(DESTDIR)$(PURPLE_PLUGIN_DIR)
+	cp $(MAIN) $(DESTDIR)$(PURPLE_PLUGIN_DIR)/
 #icon
-	mkdir -p $(DESTDIR)$(PURPLE_DATADIR)/pixmaps/pidgin/protocols
-	cp -r pixmaps/* $(DESTDIR)$(PURPLE_DATADIR)/pixmaps/pidgin/protocols/
+	mkdir -p $(DESTDIR)$(PURPLE_DATA_ROOT_DIR)/pixmaps/pidgin/protocols
+	cp -r pixmaps/* $(DESTDIR)$(PURPLE_DATA_ROOT_DIR)/pixmaps/pidgin/protocols/
 	
 #	mkdir -p ~/.purple/plugins
 #	cp $(MAIN) ~/.purple/plugins
