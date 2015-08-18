@@ -1,14 +1,29 @@
 Source: purple-line
-Section: net
+Section: contrib/net
 Priority: optional
-Maintainer: jimmy <jimmy@jimmy-alpha> 
-Build-Depends: debhelper (>= 9), libthrift-dev (>= 0.9.2), thrift-compiler (>= 0.9.2), libpurple-dev (>=1:2.10)
-Standards-Version: 3.9.5
-Homepage: http://altrepo.eu/git/purple-line.git/
+Maintainer: Matti Virkkunen <mvirkkunen@gmail.com>
+Build-Depends: debhelper (>= 9),thrift-compiler,libpurple-dev,libthrift-dev,libglib2.0-dev,python,dh-python,quilt
+Standards-Version: 3.9.6
+Homepage: http://altrepo.eu/git/purple-line/
+Vcs-Git: http://altrepo.eu/git/purple-line.git
 
 Package: purple-line
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}
-Description: Pidgin protocol plugin for LINE by Naver/LINE Corporation.
- libpurple (Pidgin, Finch) protocol plugin for LINE (http://line.me/) 
- by Naver / LINE Corporation.
+Depends: ${misc:Depends},${shlibs:Depends},
+ libpurple0,libthrift0
+Provides: purple-line
+Description: purple-line
+ libpurple (Pidgin, Finch) protocol plugin for LINE.
+ Now, this doesn't work well on Empathy.
+ To know usage, you should read README.md in /usr/share/doc/purple-line.
+ .
+
+Package: purple-line-dbg
+Section: contrib/debug
+Architecture: any
+Priority: extra
+Depends: ${misc:Depends}, purple-line (= ${binary:Version})
+Description: purple-line (debugging symbols)
+ libpurple (Pidgin, Finch) protocol plugin for LINE.
+ This package includes debug symbols.
+ .
