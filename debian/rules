@@ -23,6 +23,9 @@ include /usr/share/dpkg/default.mk
 
 override_dh_auto_build:
 	$(MAKE) all
+	
+override_dh_auto_install:
+	$(MAKE) install DESTDIR=$(CURDIR)/debian/purple-line
 
 override_dh_strip:
 	dh_strip --dbg-package=purple-line-dbg
