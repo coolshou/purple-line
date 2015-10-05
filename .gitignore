@@ -1,4 +1,6 @@
 thrift_line
+thrift_static
 *.o
 libline.so
 .depend
+*.geany
